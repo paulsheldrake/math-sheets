@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Math Sheet Generator</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11/dist/index.global.js" integrity="sha384-XXN6/S6yXj8EpXnBTw3JGR9ZM+hixGxFCLYn0FHtg9cWh0ziKmAgTPEhecbCDOmj" crossorigin="anonymous"></script>
+  <style id="page-style">@page { size: letter; margin: 0; }</style>
+  <style>
+    /* Worksheet layout needs exact physical sizing for print, which utilities can't express cleanly. */
+    :root { --page-w: 8.5in; --page-h: 11in; }
+    .sheet {
+      width: var(--page-w);
+      height: var(--page-h);
+      padding: 0.5in;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #fff;
+      color: #000;
+    }
+    .problem-groups {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12pt;
+      font-size: var(--fs, 18pt);
+      font-variant-numeric: tabular-nums;
+    }
+    .problems {
+      flex: 1 1 0;
+      min-height: 0;
+      display: grid;
+      grid-auto-rows: 1fr;
+      column-gap: 1.25em;
+    }
+    .problems > li { counter-increment: q; display: flex; align-items: flex-start; gap: 0.4em; padding-top: 0.25em; }
+    .problems > li::before { content: counter(q) "."; font-size: 0.65em; color: #444; min-width: 2em; padding-top: 0.2em; }
+    .blank { display: inline-block; width: 3.5em; border-bottom: 1px solid #000; margin-left: 0.25em; }
+    .frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; font-size: 0.85em; line-height: 1.1; margin: 0 0.12em; }
+    .frac > span:first-child { border-bottom: 1px solid currentColor; padding: 0 0.15em; }
+    .stack { display: inline-grid; grid-template-columns: auto auto; column-gap: 0.3em; text-align: right; line-height: 1.2; margin-left: 0.5em; }
+    .stack > span:nth-child(4) { border-bottom: 2px solid #000; position: relative; }
+    .stack .hang { position: absolute; left: 100%; }
+    .longdiv { display: inline-flex; align-items: flex-start; margin-top: 1.3em; margin-left: 0.5em; }
+    .longdiv > span:first-child { padding-right: 0.1em; }
+    .longdiv > span:last-child { border-top: 2px solid #000; border-left: 2px solid #000; border-top-left-radius: 0.5em 1.1em; padding: 0 0.3em 0 0.4em; }
+    .answer-key { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 2em; font-size: 11pt; }
+    /* Fixed line height lets app.js work out how many answers fit per column. */
+    .answer-key li { height: 21pt; line-height: 21pt; white-space: nowrap; }
+    @media print {
+      .sheet { margin: 0 !important; box-shadow: none !important; height: calc(var(--page-h) - 0.05in); break-after: page; }
+      .sheet:last-child { break-after: auto; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 antialiased print:bg-white">
+  <div class="lg:flex lg:items-start">
+    <aside class="bg-white border-b border-slate-200 p-5 lg:sticky lg:top-0 lg:h-screen lg:w-[26rem] lg:shrink-0 lg:overflow-y-auto lg:border-b-0 lg:border-r print:hidden">
+      <h1 class="text-xl font-bold">Math Sheet Generator</h1>
+      <p class="mt-1 text-sm text-slate-600">Grades 1&ndash;8. Pick operations and ranges; the preview updates as you go. Then print.</p>
+
+      <form id="controls" class="mt-5 space-y-6" novalidate>
+        <div>
+          <label for="grade" class="block text-sm font-semibold">Grade preset</label>
+          <select id="grade" name="grade" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-600">
+            <option value="">Custom</option>
+          </select>
+          <p class="mt-1 text-xs text-slate-600">Presets fill in operations and ranges. Adjust anything after.</p>
+        </div>
+
+        <fieldset>
+          <legend class="text-sm font-semibold">Operations and number ranges</legend>
+          <div id="operations" class="mt-2 divide-y divide-slate-100"></div>
+        </fieldset>
+
+        <fieldset class="grid grid-cols-2 gap-3">
+          <legend class="col-span-2 mb-2 text-sm font-semibold">Sheet</legend>
+          <div>
+            <label for="count" class="block text-sm">Questions per page</label>
+            <input id="count" name="count" type="number" min="1" max="60" value="20" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-600">
+          </div>
+          <div>
+            <label for="pages" class="block text-sm">Pages</label>
+            <input id="pages" name="pages" type="number" min="1" max="20" value="1" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-600">
+          </div>
+          <div>
+            <label for="layout" class="block text-sm">Layout</label>
+            <select id="layout" name="layout" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-600">
+              <option value="horizontal">Horizontal (3 + 4 =)</option>
+              <option value="vertical">Vertical (stacked)</option>
+            </select>
+          </div>
+          <div>
+            <label for="paper" class="block text-sm">Paper</label>
+            <select id="paper" name="paper" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-600">
+              <option value="letter">Letter</option>
+              <option value="a4">A4</option>
+            </select>
+          </div>
+        </fieldset>
+
+        <fieldset class="space-y-2">
+          <legend class="mb-2 text-sm font-semibold">Options</legend>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="showName" checked class="h-4 w-4 accent-indigo-600"> Show name field</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="showScore" checked class="h-4 w-4 accent-indigo-600"> Show score field</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="allowNegatives" class="h-4 w-4 accent-indigo-600"> Allow negative answers</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="remainders" class="h-4 w-4 accent-indigo-600"> Division with remainders</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="answerKey" class="h-4 w-4 accent-indigo-600"> Include answer key pages</label>
+        </fieldset>
+
+        <p id="error" role="alert" class="text-sm font-medium text-red-700"></p>
+
+        <div class="flex gap-3">
+          <button type="submit" class="flex-1 rounded-md bg-indigo-600 px-4 py-2.5 font-semibold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">New problems</button>
+          <button type="button" id="print" class="flex-1 rounded-md border border-slate-300 bg-white px-4 py-2.5 font-semibold hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Print</button>
+        </div>
+      </form>
+    </aside>
+
+    <main id="preview" class="min-w-0 flex-1 overflow-x-auto p-5 print:overflow-visible print:p-0" aria-label="Worksheet preview" aria-live="polite"></main>
+  </div>
+
+  <script src="generator.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

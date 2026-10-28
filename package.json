@@ -1,0 +1,8 @@
+{
+  "name": "math-sheets",
+  "private": true,
+  "description": "Printable math worksheet generator for grades 1-8.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

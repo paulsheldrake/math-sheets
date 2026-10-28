@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Math Sheet Generator</title>
+  <link rel="icon" href="data:,">
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11/dist/index.global.js" integrity="sha384-XXN6/S6yXj8EpXnBTw3JGR9ZM+hixGxFCLYn0FHtg9cWh0ziKmAgTPEhecbCDOmj" crossorigin="anonymous"></script>
   <style id="page-style">@page { size: letter; margin: 0; }</style>
   <style>
@@ -50,6 +51,10 @@
     .answer-key { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 2em; font-size: 11pt; }
     /* Fixed line height lets app.js work out how many answers fit per column. */
     .answer-key li { height: 21pt; line-height: 21pt; white-space: nowrap; }
+    /* zoom (not transform) so the scaled sheet's layout box shrinks too and the preview scrolls correctly. */
+    @media screen {
+      .sheet { zoom: var(--zoom, 1); }
+    }
     @media print {
       .sheet { margin: 0 !important; box-shadow: none !important; height: calc(var(--page-h) - 0.05in); break-after: page; }
       .sheet:last-child { break-after: auto; }
@@ -57,8 +62,9 @@
   </style>
 </head>
 <body class="bg-slate-100 text-slate-900 antialiased print:bg-white">
+  <a href="#preview" class="sr-only z-20 rounded-md bg-indigo-600 px-4 py-2 font-semibold text-white focus:not-sr-only focus:fixed focus:left-4 focus:top-4 print:hidden">Skip to worksheet preview</a>
   <div class="lg:flex lg:items-start">
-    <aside class="bg-white border-b border-slate-200 p-5 lg:sticky lg:top-0 lg:h-screen lg:w-[26rem] lg:shrink-0 lg:overflow-y-auto lg:border-b-0 lg:border-r print:hidden">
+    <aside aria-label="Worksheet options" class="bg-white border-b border-slate-200 p-5 lg:sticky lg:top-0 lg:h-screen lg:w-[26rem] lg:shrink-0 lg:overflow-y-auto lg:border-b-0 lg:border-r print:hidden">
       <h1 class="text-xl font-bold">Math Sheet Generator</h1>
       <p class="mt-1 text-sm text-slate-600">Grades 1&ndash;8. Pick operations and ranges; the preview updates as you go. Then print.</p>
 
@@ -80,7 +86,7 @@
           <legend class="col-span-2 mb-2 text-sm font-semibold">Sheet</legend>
           <div>
             <label for="count" class="block text-sm">Questions per page</label>
-            <input id="count" name="count" type="number" min="1" max="60" value="20" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-600">
+            <input id="count" name="count" type="number" min="1" max="60" value="10" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-600">
           </div>
           <div>
             <label for="pages" class="block text-sm">Pages</label>
@@ -104,14 +110,15 @@
 
         <fieldset class="space-y-2">
           <legend class="mb-2 text-sm font-semibold">Options</legend>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="showName" checked class="h-4 w-4 accent-indigo-600"> Show name field</label>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="showScore" checked class="h-4 w-4 accent-indigo-600"> Show score field</label>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="allowNegatives" class="h-4 w-4 accent-indigo-600"> Allow negative answers</label>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="remainders" class="h-4 w-4 accent-indigo-600"> Division with remainders</label>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="answerKey" class="h-4 w-4 accent-indigo-600"> Include answer key pages</label>
+          <label class="flex min-h-6 items-center gap-2 text-sm"><input type="checkbox" name="showName" checked class="h-4 w-4 accent-indigo-600"> Show name field</label>
+          <label class="flex min-h-6 items-center gap-2 text-sm"><input type="checkbox" name="showScore" checked class="h-4 w-4 accent-indigo-600"> Show score field</label>
+          <label class="flex min-h-6 items-center gap-2 text-sm"><input type="checkbox" name="allowNegatives" class="h-4 w-4 accent-indigo-600"> Allow negative answers</label>
+          <label class="flex min-h-6 items-center gap-2 text-sm"><input type="checkbox" name="remainders" class="h-4 w-4 accent-indigo-600"> Division with remainders</label>
+          <label class="flex min-h-6 items-center gap-2 text-sm"><input type="checkbox" name="answerKey" class="h-4 w-4 accent-indigo-600"> Include answer key pages</label>
         </fieldset>
 
         <p id="error" role="alert" class="text-sm font-medium text-red-700"></p>
+        <p id="status" role="status" class="sr-only"></p>
 
         <div class="flex gap-3">
           <button type="submit" class="flex-1 rounded-md bg-indigo-600 px-4 py-2.5 font-semibold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">New problems</button>
@@ -120,7 +127,15 @@
       </form>
     </aside>
 
-    <main id="preview" class="min-w-0 flex-1 overflow-x-auto p-5 print:overflow-visible print:p-0" aria-label="Worksheet preview" aria-live="polite"></main>
+    <main class="min-w-0 flex-1">
+      <div role="toolbar" aria-label="Preview zoom" class="sticky top-0 z-10 flex items-center justify-end gap-2 border-b border-slate-200 bg-slate-100/95 px-4 py-2 backdrop-blur sm:px-5 print:hidden">
+        <button type="button" id="zoom-out" aria-label="Zoom out" class="h-11 w-11 rounded-md border border-slate-300 bg-white text-xl font-semibold hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600">&minus;</button>
+        <output id="zoom-level" aria-live="polite" class="min-w-24 text-center text-sm tabular-nums">Fit</output>
+        <button type="button" id="zoom-in" aria-label="Zoom in" class="h-11 w-11 rounded-md border border-slate-300 bg-white text-xl font-semibold hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600">+</button>
+        <button type="button" id="zoom-fit" class="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 aria-pressed:bg-indigo-600 aria-pressed:text-white">Fit</button>
+      </div>
+      <section id="preview" tabindex="-1" class="relative overflow-x-auto p-4 focus:outline-none sm:p-5 print:overflow-visible print:p-0" aria-label="Worksheet preview"></section>
+    </main>
   </div>
 
   <script src="generator.js"></script>

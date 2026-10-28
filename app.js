@@ -33,17 +33,20 @@
     opsContainer.innerHTML = OPERATIONS.map(
       (op) => `
       <div class="grid grid-cols-[1fr_auto_auto] items-center gap-2 py-2">
-        <label class="flex items-start gap-2 text-sm">
-          <input type="checkbox" name="op-${op.id}" class="mt-0.5 h-4 w-4 accent-indigo-600">
-          <span>${op.label}<span class="block text-xs text-slate-600">${op.rangeHint}</span></span>
+        <div>
+          <label class="flex min-h-6 items-center gap-2 text-sm">
+            <input type="checkbox" name="op-${op.id}" aria-describedby="hint-${op.id}" class="h-4 w-4 accent-indigo-600">
+            ${op.label}
+          </label>
+          <span id="hint-${op.id}" class="ml-6 block text-xs text-slate-600">Range: ${op.rangeHint.toLowerCase()}</span>
+        </div>
+        <label class="flex items-center gap-1 text-xs text-slate-600">
+          From
+          <input type="number" name="min-${op.id}" value="${op.defaults.min}" aria-label="${op.label} from" aria-describedby="hint-${op.id}" class="${inputClass}">
         </label>
         <label class="flex items-center gap-1 text-xs text-slate-600">
-          <span>From</span><span class="sr-only">${op.label} minimum</span>
-          <input type="number" name="min-${op.id}" value="${op.defaults.min}" class="${inputClass}">
-        </label>
-        <label class="flex items-center gap-1 text-xs text-slate-600">
-          <span>to</span><span class="sr-only">${op.label} maximum</span>
-          <input type="number" name="max-${op.id}" value="${op.defaults.max}" class="${inputClass}">
+          to
+          <input type="number" name="max-${op.id}" value="${op.defaults.max}" aria-label="${op.label} to" aria-describedby="hint-${op.id}" class="${inputClass}">
         </label>
       </div>`
     ).join('');
@@ -71,7 +74,7 @@
     return {
       grade: f.grade.value,
       ops,
-      count: clamp(intOr(f.count.value, 20), 1, MAX_COUNT),
+      count: clamp(intOr(f.count.value, 10), 1, MAX_COUNT),
       pages: clamp(intOr(f.pages.value, 1), 1, MAX_PAGES),
       layout: f.layout.value,
       paper: f.paper.value in PAPER ? f.paper.value : 'letter',
@@ -136,7 +139,8 @@
   function valueHtml(v) {
     if (typeof v === 'number' || typeof v === 'string') return escapeHtml(plain(v));
     const sign = v.neg ? '−' : '';
-    return `<span class="whitespace-nowrap">${sign}${v.w || ''}<span class="frac"><span>${v.n}</span><span>${v.d}</span></span></span>`;
+    // Screen readers get "1 3/4" instead of the stacked digits read as separate numbers.
+    return `<span class="sr-only">${plain(v)}</span><span class="whitespace-nowrap" aria-hidden="true">${sign}${v.w || ''}<span class="frac"><span>${v.n}</span><span>${v.d}</span></span></span>`;
   }
 
   function rightHtml(v) {
@@ -267,7 +271,7 @@
     const lists = groups
       .map((g) => {
         const items = g.problems
-          .map((p) => `<li aria-label="${escapeHtml(p.text)} equals blank">${problemHtml(p, g.stacked)}</li>`)
+          .map((p) => `<li><span class="sr-only">${escapeHtml(p.text)} equals blank</span>${problemHtml(p, g.stacked)}</li>`)
           .join('');
         const rows = Math.ceil(g.problems.length / g.cols);
         const style = `grid-template-columns:repeat(${g.cols},minmax(0,1fr));flex-grow:${rows};counter-reset:q ${numbered}`;
@@ -362,6 +366,38 @@
     return true;
   }
 
+  const MIN_ZOOM = 0.25;
+  const MAX_ZOOM = 2;
+  const ZOOM_STEP = 1.25;
+  const zoomLevel = document.getElementById('zoom-level');
+  const zoomFit = document.getElementById('zoom-fit');
+  // 'fit' scales sheets to the preview width (never above 100%); a number is a fixed scale.
+  let zoom = 'fit';
+
+  function fitScale() {
+    const paper = PAPER[form.elements.paper.value] || PAPER.letter;
+    const cs = getComputedStyle(preview);
+    const available = preview.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    return clamp(available / (paper.w * 96), MIN_ZOOM, 1);
+  }
+
+  function currentScale() {
+    return zoom === 'fit' ? fitScale() : zoom;
+  }
+
+  function applyZoom() {
+    const scale = currentScale();
+    const percent = `${Math.round(scale * 100)}%`;
+    preview.style.setProperty('--zoom', scale.toFixed(3));
+    zoomLevel.textContent = zoom === 'fit' ? `Fit (${percent})` : percent;
+    zoomFit.setAttribute('aria-pressed', String(zoom === 'fit'));
+  }
+
+  function zoomBy(factor) {
+    zoom = clamp(currentScale() * factor, MIN_ZOOM, MAX_ZOOM);
+    applyZoom();
+  }
+
   // A fixed seed means display-only changes (layout, paper, header fields) keep the same problems.
   let seed = newSeed();
 
@@ -372,7 +408,9 @@
   function update() {
     const state = readForm();
     save(state);
-    return render(state);
+    const ok = render(state);
+    applyZoom(); // paper size changes the fit scale
+    return ok;
   }
 
   let pending;
@@ -402,11 +440,26 @@
   // Once a field is left, show the clamped value actually being used (e.g. 500 questions -> 60).
   form.addEventListener('change', () => applyState(readForm()));
 
-  gradeSelect.addEventListener('change', () => applyPreset(gradeSelect.value));
+  // Presets change many fields at once, so tell screen reader users what happened.
+  const status = document.getElementById('status');
+  gradeSelect.addEventListener('change', () => {
+    applyPreset(gradeSelect.value);
+    if (gradeSelect.value) status.textContent = `Grade ${gradeSelect.value} preset applied.`;
+  });
 
   // Hand edits to an operation mean the sheet no longer matches the chosen preset.
   opsContainer.addEventListener('input', () => {
     gradeSelect.value = '';
+  });
+
+  document.getElementById('zoom-in').addEventListener('click', () => zoomBy(ZOOM_STEP));
+  document.getElementById('zoom-out').addEventListener('click', () => zoomBy(1 / ZOOM_STEP));
+  zoomFit.addEventListener('click', () => {
+    zoom = 'fit';
+    applyZoom();
+  });
+  window.addEventListener('resize', () => {
+    if (zoom === 'fit') applyZoom();
   });
 
   document.getElementById('print').addEventListener('click', () => {

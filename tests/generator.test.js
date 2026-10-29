@@ -55,6 +55,19 @@ test('multiplication is correct', () => {
   }
 });
 
+test('multiplication with picked times tables uses only those tables', () => {
+  const tables = [2, 3, 5, 9];
+  const problems = many('multiplication', { min: 0, max: 10, tables });
+  for (const p of problems) {
+    assert.equal(p.answer, p.left * p.right);
+    const fact = tables.includes(p.left) ? p.right : p.left;
+    assert.ok(tables.includes(p.left) || tables.includes(p.right), p.text);
+    assert.ok(fact >= 0 && fact <= 10, p.text);
+  }
+  for (const n of tables) assert.ok(problems.some((p) => p.left === n || p.right === n), `table ${n}`);
+  assert.ok(problems.some((p) => tables.includes(p.left)) && problems.some((p) => tables.includes(p.right)));
+});
+
 test('division is exact by default and never divides by zero', () => {
   for (const p of many('division', { min: 0, max: 10 })) {
     assert.ok(p.right >= 1);

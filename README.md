@@ -8,7 +8,7 @@ Printable math worksheet generator for grades 1–8. Pick operations and number 
 
 - **Grade presets** aligned to the [BC Mathematics curriculum](https://curriculum.gov.bc.ca/curriculum/mathematics) (Grade 3 by default). Every preset value can be adjusted afterwards.
 - **Operations**, each with its own number range:
-  - Addition, subtraction, multiplication, division (optionally with remainders)
+  - Addition, subtraction, multiplication (optionally limited to chosen times tables, e.g. 2, 3, 5 and 9), division (optionally with remainders)
   - Fractions (+ −) and fractions (× ÷)
   - Decimals (+ −)
   - Negative numbers

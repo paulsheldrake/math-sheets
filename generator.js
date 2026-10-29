@@ -152,10 +152,18 @@
       id: 'multiplication',
       label: 'Multiplication',
       rangeHint: 'Each factor',
+      tables: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
       defaults: { min: 0, max: 10 },
-      generate(rng, { min, max }) {
-        const a = randInt(rng, min, max);
-        const b = randInt(rng, min, max);
+      generate(rng, { min, max, tables }) {
+        if (!tables?.length) {
+          const a = randInt(rng, min, max);
+          const b = randInt(rng, min, max);
+          return binary('multiplication', a, TIMES, b, a * b, true);
+        }
+        // Picked times tables fix one factor; the range sets the other. Either side, so both orders get practised.
+        const fact = pick(rng, tables);
+        const other = randInt(rng, min, max);
+        const [a, b] = rng() < 0.5 ? [fact, other] : [other, fact];
         return binary('multiplication', a, TIMES, b, a * b, true);
       },
     },

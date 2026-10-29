@@ -48,8 +48,37 @@
           to
           <input type="number" name="max-${op.id}" value="${op.defaults.max}" aria-label="${op.label} to" aria-describedby="hint-${op.id}" class="${inputClass}">
         </label>
+        ${op.tables ? tablesHtml(op) : ''}
       </div>`
     ).join('');
+  }
+
+  function tablesHtml(op) {
+    const chips = op.tables
+      .map(
+        (n) => `
+          <label>
+            <input type="checkbox" name="table-${op.id}" value="${n}" class="peer sr-only">
+            <span class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-slate-500 text-sm tabular-nums peer-checked:border-indigo-600 peer-checked:bg-indigo-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-600 peer-focus-visible:ring-offset-1">${n}</span>
+          </label>`
+      )
+      .join('');
+    return `
+      <fieldset class="col-span-full ml-6" aria-describedby="tables-hint-${op.id}">
+        <legend class="text-xs font-medium">Only these times tables</legend>
+        <span id="tables-hint-${op.id}" class="block text-xs text-slate-600">Optional. The range then sets the other factor.</span>
+        <div class="mt-1 flex flex-wrap gap-1">${chips}</div>
+      </fieldset>`;
+  }
+
+  function checkedTables(opId) {
+    return [...form.querySelectorAll(`input[name="table-${opId}"]:checked`)].map((input) => Number(input.value));
+  }
+
+  function setTables(opId, tables) {
+    for (const input of form.querySelectorAll(`input[name="table-${opId}"]`)) {
+      input.checked = tables.includes(Number(input.value));
+    }
   }
 
   function intOr(value, fallback) {
@@ -70,6 +99,7 @@
         min: intOr(f[`min-${op.id}`].value, op.defaults.min),
         max: intOr(f[`max-${op.id}`].value, op.defaults.max),
       };
+      if (op.tables) ops[op.id].tables = checkedTables(op.id);
     }
     return {
       grade: f.grade.value,
@@ -94,6 +124,7 @@
       f[`op-${op.id}`].checked = Boolean(s.on);
       f[`min-${op.id}`].value = s.min;
       f[`max-${op.id}`].value = s.max;
+      if (op.tables) setTables(op.id, s.tables || []);
     }
     for (const name of ['grade', 'count', 'pages', 'layout', 'paper']) {
       if (state[name] !== undefined) f[name].value = state[name];
@@ -114,6 +145,7 @@
         f[`min-${op.id}`].value = range[0];
         f[`max-${op.id}`].value = range[1];
       }
+      if (op.tables) setTables(op.id, []);
     }
     f.layout.value = Number(grade) <= 5 ? 'vertical' : 'horizontal';
     f.allowNegatives.checked = Boolean(preset.options?.allowNegatives);
@@ -448,8 +480,11 @@
   });
 
   // Hand edits to an operation mean the sheet no longer matches the chosen preset.
-  opsContainer.addEventListener('input', () => {
+  opsContainer.addEventListener('input', (e) => {
     gradeSelect.value = '';
+    // Picking a times table implies the user wants that operation on the sheet.
+    const table = e.target.name?.match(/^table-(.+)$/);
+    if (table && e.target.checked) form.elements[`op-${table[1]}`].checked = true;
   });
 
   document.getElementById('zoom-in').addEventListener('click', () => zoomBy(ZOOM_STEP));

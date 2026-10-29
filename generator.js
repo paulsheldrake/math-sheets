@@ -240,7 +240,9 @@
         const kind = pick(rng, ['+', MINUS, TIMES, DIVIDE]);
         if (kind === DIVIDE) {
           let divisor = 0;
-          while (divisor === 0) divisor = randInt(rng, min, max);
+          // A range of only 0 has no valid divisor, so stop trying rather than loop forever.
+          for (let attempt = 0; attempt < 25 && divisor === 0; attempt++) divisor = randInt(rng, min, max);
+          if (divisor === 0) divisor = 1;
           const quotient = randInt(rng, min, max);
           return binary('integers', divisor * quotient, DIVIDE, divisor, quotient, false);
         }

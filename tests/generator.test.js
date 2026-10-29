@@ -129,6 +129,12 @@ test('negative-number problems are correct', () => {
   }
 });
 
+test('negative-number division with a zero-only range still finishes', () => {
+  for (const p of many('integers', { min: 0, max: 0 })) {
+    if (p.symbol === '÷') assert.equal(p.right, 1);
+  }
+});
+
 test('order of operations answers match standard precedence and are non-negative', () => {
   for (const p of many('orderOfOperations', { min: 1, max: 20 })) {
     assert.equal(evalExpression(p.expr), p.answer);

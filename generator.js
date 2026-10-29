@@ -45,6 +45,26 @@
     return list;
   }
 
+  // Small ranges are dealt from a shuffled bag so a sheet uses every value before
+  // repeating one; independent draws leave about a third of 0–10 off a 10-question sheet.
+  const BAG_LIMIT = 25;
+
+  function makeDraw(rng) {
+    const bags = new Map();
+    return function draw(key, min, max) {
+      const lo = Math.ceil(Math.min(min, max));
+      const hi = Math.floor(Math.max(min, max));
+      if (hi - lo >= BAG_LIMIT) return randInt(rng, lo, hi);
+      const id = `${key}:${lo}:${hi}`;
+      let bag = bags.get(id);
+      if (!bag?.length) {
+        bag = shuffle(rng, Array.from({ length: hi - lo + 1 }, (_, i) => lo + i));
+        bags.set(id, bag);
+      }
+      return bag.pop();
+    };
+  }
+
   function gcd(a, b) {
     a = Math.abs(a);
     b = Math.abs(b);
@@ -97,10 +117,10 @@
     };
   }
 
-  function properFraction(rng, min, max) {
+  function properFraction(rng, min, max, draw, key) {
     const lo = Math.max(2, Math.min(min, max));
     const hi = Math.max(lo, Math.max(min, max));
-    const d = randInt(rng, lo, hi);
+    const d = draw(key, lo, hi);
     return { n: randInt(rng, 1, d - 1), d };
   }
 
@@ -130,9 +150,9 @@
       label: 'Addition',
       rangeHint: 'Each number',
       defaults: { min: 0, max: 20 },
-      generate(rng, { min, max }) {
-        const a = randInt(rng, min, max);
-        const b = randInt(rng, min, max);
+      generate(rng, { min, max }, settings, draw = makeDraw(rng)) {
+        const a = draw('addition.a', min, max);
+        const b = draw('addition.b', min, max);
         return binary('addition', a, '+', b, a + b, true);
       },
     },
@@ -141,9 +161,9 @@
       label: 'Subtraction',
       rangeHint: 'Each number',
       defaults: { min: 0, max: 20 },
-      generate(rng, { min, max }, settings) {
-        let a = randInt(rng, min, max);
-        let b = randInt(rng, min, max);
+      generate(rng, { min, max }, settings, draw = makeDraw(rng)) {
+        let a = draw('subtraction.a', min, max);
+        let b = draw('subtraction.b', min, max);
         if (!settings.allowNegatives && b > a) [a, b] = [b, a];
         return binary('subtraction', a, MINUS, b, a - b, true);
       },
@@ -154,15 +174,15 @@
       rangeHint: 'Each factor',
       tables: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
       defaults: { min: 0, max: 10 },
-      generate(rng, { min, max, tables }) {
+      generate(rng, { min, max, tables }, settings, draw = makeDraw(rng)) {
         if (!tables?.length) {
-          const a = randInt(rng, min, max);
-          const b = randInt(rng, min, max);
+          const a = draw('multiplication.a', min, max);
+          const b = draw('multiplication.b', min, max);
           return binary('multiplication', a, TIMES, b, a * b, true);
         }
         // Picked times tables fix one factor; the range sets the other. Either side, so both orders get practised.
-        const fact = pick(rng, tables);
-        const other = randInt(rng, min, max);
+        const fact = tables[draw('multiplication.table', 0, tables.length - 1)];
+        const other = draw('multiplication.other', min, max);
         const [a, b] = rng() < 0.5 ? [fact, other] : [other, fact];
         return binary('multiplication', a, TIMES, b, a * b, true);
       },
@@ -172,11 +192,11 @@
       label: 'Division',
       rangeHint: 'Divisor and quotient',
       defaults: { min: 1, max: 10 },
-      generate(rng, { min, max }, settings) {
+      generate(rng, { min, max }, settings, draw = makeDraw(rng)) {
         const lo = Math.max(1, Math.min(min, max));
         const hi = Math.max(lo, max);
-        const divisor = randInt(rng, lo, hi);
-        const quotient = randInt(rng, Math.max(0, min), Math.max(0, max));
+        const divisor = draw('division.divisor', lo, hi);
+        const quotient = draw('division.quotient', Math.max(0, min), Math.max(0, max));
         if (settings.remainders && divisor > 1) {
           const remainder = randInt(rng, 1, divisor - 1);
           const dividend = divisor * quotient + remainder;
@@ -190,9 +210,9 @@
       label: 'Fractions (+ −)',
       rangeHint: 'Denominators',
       defaults: { min: 2, max: 10 },
-      generate(rng, { min, max }, settings) {
-        let a = properFraction(rng, min, max);
-        let b = properFraction(rng, min, max);
+      generate(rng, { min, max }, settings, draw = makeDraw(rng)) {
+        let a = properFraction(rng, min, max, draw, 'fractionAddSub');
+        let b = properFraction(rng, min, max, draw, 'fractionAddSub');
         const add = rng() < 0.5;
         if (!add && !settings.allowNegatives && compareFractions(a, b) < 0) [a, b] = [b, a];
         const result = simplify(add ? a.n * b.d + b.n * a.d : a.n * b.d - b.n * a.d, a.d * b.d);
@@ -204,9 +224,9 @@
       label: `Fractions (${TIMES} ${DIVIDE})`,
       rangeHint: 'Denominators',
       defaults: { min: 2, max: 10 },
-      generate(rng, { min, max }) {
-        const a = properFraction(rng, min, max);
-        const b = properFraction(rng, min, max);
+      generate(rng, { min, max }, settings, draw = makeDraw(rng)) {
+        const a = properFraction(rng, min, max, draw, 'fractionMulDiv');
+        const b = properFraction(rng, min, max, draw, 'fractionMulDiv');
         const multiply = rng() < 0.5;
         const result = multiply ? simplify(a.n * b.n, a.d * b.d) : simplify(a.n * b.d, a.d * b.n);
         return binary('fractionMulDiv', a, multiply ? TIMES : DIVIDE, b, toMixed(result), false);
@@ -257,19 +277,19 @@
       label: 'Order of operations',
       rangeHint: 'Each number',
       defaults: { min: 1, max: 12 },
-      generate(rng, { min, max }, settings) {
+      generate(rng, { min, max }, settings, draw = makeDraw(rng)) {
         const lo = Math.max(1, Math.min(min, max));
         const hi = Math.max(lo, max);
+        const num = () => draw('orderOfOperations', lo, hi);
         let expr;
         let answer;
         for (let attempt = 0; attempt < 30; attempt++) {
-          const pattern = pick(rng, ORDER_PATTERNS);
-          [expr, answer] = pattern(randInt(rng, lo, hi), randInt(rng, lo, hi), randInt(rng, lo, hi));
+          const pattern = ORDER_PATTERNS[draw('orderOfOperations.pattern', 0, ORDER_PATTERNS.length - 1)];
+          [expr, answer] = pattern(num(), num(), num());
           if (settings.allowNegatives || answer >= 0) break;
         }
         if (!settings.allowNegatives && answer < 0) {
-          const [a, b, c] = [randInt(rng, lo, hi), randInt(rng, lo, hi), randInt(rng, lo, hi)];
-          [expr, answer] = ORDER_PATTERNS[0](a, b, c);
+          [expr, answer] = ORDER_PATTERNS[0](num(), num(), num());
         }
         return { op: 'orderOfOperations', expr, stackable: false, answer, text: expr, answerText: plain(answer) };
       },
@@ -321,13 +341,14 @@
     const opts = { ...DEFAULT_SETTINGS, ...settings };
     const order = shuffle(rng, Array.from({ length: count }, (_, i) => selections[i % selections.length]));
     const seen = new Set();
+    const draw = makeDraw(rng);
     return order.map((sel) => {
       const op = OPERATIONS_BY_ID[sel.id];
       if (!op) throw new Error(`Unknown operation: ${sel.id}`);
       let problem;
       // Small ranges can't always avoid repeats, so give up after a few tries.
       for (let attempt = 0; attempt < 25; attempt++) {
-        problem = op.generate(rng, sel, opts);
+        problem = op.generate(rng, sel, opts, draw);
         if (!seen.has(problem.text)) break;
       }
       seen.add(problem.text);

@@ -68,6 +68,22 @@ test('multiplication with picked times tables uses only those tables', () => {
   assert.ok(problems.some((p) => tables.includes(p.left)) && problems.some((p) => tables.includes(p.right)));
 });
 
+test('a sheet uses every number in a small range before repeating one', () => {
+  for (let seed = 1; seed <= 50; seed++) {
+    const nines = generateProblems([{ id: 'multiplication', min: 1, max: 12, tables: [9] }], 12, {}, mulberry32(seed));
+    const others = nines.map((p) => (p.left === 9 && p.right !== 9 ? p.right : p.left === 9 ? 9 : p.left));
+    assert.deepEqual(others.sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], `seed ${seed}`);
+
+    // A 10–12 range keeps the other factor out of the picked tables, so each problem's table is unambiguous.
+    const picked = generateProblems([{ id: 'multiplication', min: 10, max: 12, tables: [2, 3, 5, 9] }], 4, {}, mulberry32(seed));
+    const tablesUsed = new Set(picked.map((p) => ([2, 3, 5, 9].includes(p.left) ? p.left : p.right)));
+    assert.equal(tablesUsed.size, 4, `seed ${seed}: ${picked.map((p) => p.text)}`);
+
+    const divisors = generateProblems([{ id: 'division', min: 1, max: 10 }], 10, {}, mulberry32(seed)).map((p) => p.right);
+    assert.equal(new Set(divisors).size, 10, `seed ${seed}`);
+  }
+});
+
 test('division is exact by default and never divides by zero', () => {
   for (const p of many('division', { min: 0, max: 10 })) {
     assert.ok(p.right >= 1);

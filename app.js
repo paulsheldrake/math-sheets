@@ -2,6 +2,7 @@
   'use strict';
 
   const { OPERATIONS, GRADE_PRESETS, DEFAULT_GRADE, generateSheets, plain, isFraction } = window.MathSheets;
+  const { encodeState, decodeState } = window.MathSheetsShare;
 
   const STORAGE_KEY = 'math-sheets:settings';
   const MAX_COUNT = 60;
@@ -437,9 +438,19 @@
     return Math.floor(Math.random() * 2 ** 32);
   }
 
+  // replaceState, not pushState: every tweak shouldn't become a Back-button step.
+  function syncUrl(state) {
+    try {
+      history.replaceState(null, '', `?${encodeState(state, seed, OPERATIONS)}${location.hash}`);
+    } catch (e) {
+      // Some browsers block history changes on file:// pages; sharing just won't work there.
+    }
+  }
+
   function update() {
     const state = readForm();
     save(state);
+    syncUrl(state);
     const ok = render(state);
     applyZoom(); // paper size changes the fit scale
     return ok;
@@ -452,8 +463,12 @@
   }
 
   buildControls();
+  const shared = decodeState(location.search, OPERATIONS);
   const saved = load();
-  if (saved) {
+  if (shared) {
+    applyState(shared.state);
+    if (shared.seed !== undefined) seed = shared.seed;
+  } else if (saved) {
     applyState(saved);
   } else {
     gradeSelect.value = DEFAULT_GRADE;

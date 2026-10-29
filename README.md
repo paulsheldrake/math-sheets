@@ -17,7 +17,7 @@ Printable math worksheet generator for grades 1–8. Pick operations and number 
 - **Horizontal** (`3 + 4 = ___`) or **vertical** (stacked, with long division) layout.
 - Letter or A4 paper, optional name and score fields, and an optional answer key.
 - The preview updates as you change options. **New problems** reshuffles the questions without changing the settings.
-- Settings are remembered in the browser.
+- Settings are remembered in the browser, and the page URL updates as you change options. Share the link to share the exact sheet; **New problems** changes the link too.
 
 ## Running locally
 
@@ -38,7 +38,8 @@ npm test
 | `index.html` | Page markup, Tailwind, and print/worksheet CSS |
 | `app.js` | Form handling, sheet layout, and rendering |
 | `generator.js` | Problem generation and grade presets (no DOM; shared with tests) |
-| `tests/generator.test.js` | Unit tests for the generator |
+| `share.js` | Encodes settings in the URL for shareable links (no DOM; shared with tests) |
+| `tests/` | Unit tests for the generator and share links |
 
 ## Deployment
 
